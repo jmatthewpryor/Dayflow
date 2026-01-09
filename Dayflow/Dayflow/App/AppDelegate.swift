@@ -122,6 +122,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     let finalState = await MainActor.run { AppState.shared.isRecording }
                     AnalyticsService.shared.capture("recording_toggled", ["enabled": finalState, "reason": "auto"])
+
+                    // Start background OCR processing for search feature
+                    Task { await OCRProcessingService.shared.startProcessing() }
                 } catch {
                     // No permission or error - don't start recording
                     // User will need to grant permission in onboarding

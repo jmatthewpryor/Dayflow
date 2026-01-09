@@ -7,6 +7,7 @@ import Foundation
 final class StorageSettingsViewModel: ObservableObject {
     @Published var isRefreshingStorage = false
     @Published var storagePermissionGranted: Bool?
+    @Published var accessibilityEnabled = false
     @Published var lastStorageCheck: Date?
     @Published var recordingsUsageBytes: Int64 = 0
     @Published var timelapseUsageBytes: Int64 = 0
@@ -32,6 +33,7 @@ final class StorageSettingsViewModel: ObservableObject {
         timelapsesLimitBytes = timelapseLimit
         recordingsLimitIndex = Self.indexForLimit(recordingsLimit)
         timelapsesLimitIndex = Self.indexForLimit(timelapseLimit)
+        accessibilityEnabled = AppContextService.isAccessibilityEnabled()
     }
 
     func refreshStorageIfNeeded(isStorageTab: Bool) {
@@ -150,6 +152,13 @@ final class StorageSettingsViewModel: ObservableObject {
         let url = TimelapseStorageManager.shared.rootURL
         ensureDirectoryExists(url)
         NSWorkspace.shared.open(url)
+    }
+
+    func requestAccessibilityPermission() {
+        AppContextService.requestAccessibilityPermission()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.accessibilityEnabled = AppContextService.isAccessibilityEnabled()
+        }
     }
 
     private func ensureDirectoryExists(_ url: URL) {

@@ -347,8 +347,20 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
             let fileURL = StorageManager.shared.nextScreenshotURL()
             try jpegData.write(to: fileURL)
 
-            // 6. Register in database
-            _ = StorageManager.shared.saveScreenshot(url: fileURL, capturedAt: captureTime)
+            // 6. Register in database and capture app context
+            if let screenshotId = StorageManager.shared.saveScreenshot(url: fileURL, capturedAt: captureTime) {
+                // Capture app context asynchronously (non-blocking)
+                Task.detached(priority: .utility) {
+                    let context = await AppContextService.shared.captureContext()
+                    StorageManager.shared.saveScreenshotContext(
+                        screenshotId: screenshotId,
+                        appName: context.appName,
+                        bundleId: context.bundleId,
+                        windowTitle: context.windowTitle,
+                        browserURL: context.browserURL
+                    )
+                }
+            }
 
             dbg("📸 Screenshot saved: \(fileURL.lastPathComponent) (\(jpegData.count / 1024)KB)")
 

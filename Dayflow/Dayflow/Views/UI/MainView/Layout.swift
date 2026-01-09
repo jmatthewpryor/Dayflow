@@ -99,6 +99,7 @@ extension MainView {
                 case .timeline: tabName = "timeline"
                 case .dashboard: tabName = "dashboard"
                 case .journal: tabName = "journal"
+                case .search: tabName = "search"
                 case .bug: tabName = "bug_report"
                 case .settings: tabName = "settings"
                 }
@@ -268,6 +269,9 @@ extension MainView {
                     .padding(15)
             case .journal:
                 JournalView()
+                    .padding(15)
+            case .search:
+                SearchView(searchState: searchState)
                     .padding(15)
             case .bug:
                 BugReportView()
@@ -584,6 +588,22 @@ extension MainView {
                 .environmentObject(categoryStore)
                 .transition(.opacity)
                 .zIndex(2)
+            }
+
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSearch)) { _ in
+            // Navigate to search tab instead of showing modal overlay
+            selectedIcon = .search
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToScreenshot)) { notification in
+            if let timestamp = notification.userInfo?["timestamp"] as? Date {
+                // Navigate to the timeline tab and set the date
+                selectedIcon = .timeline
+                setSelectedDate(timestamp)
+                // Trigger scroll to show that time
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    scrollToNowTick &+= 1
+                }
             }
         }
     }

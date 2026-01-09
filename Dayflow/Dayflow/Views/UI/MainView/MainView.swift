@@ -37,6 +37,9 @@ struct MainView: View {
     @Namespace var videoHeroNamespace
     @StateObject var videoExpansionState = VideoExpansionState()
 
+    // Search overlay (Cmd+K)
+    @StateObject var searchState = SearchState()
+
     // Track if we've performed the initial scroll to current time
     @State var didInitialScroll = false
     @State var previousDate = timelineDisplayDate(from: Date())
