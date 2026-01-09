@@ -5,15 +5,32 @@ struct SettingsStorageTabView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
-            SettingsCard(title: "Recording Status", subtitle: "Ensure Dayflow can capture your screen") {
+            SettingsCard(title: "Permissions", subtitle: "Required access for Dayflow to function") {
+                VStack(alignment: .leading, spacing: 16) {
+                    permissionRow(
+                        granted: viewModel.storagePermissionGranted == true,
+                        title: "Screen Recording",
+                        description: "Required to capture your screen",
+                        grantedDescription: "Dayflow can capture your screen",
+                        action: viewModel.runStorageStatusCheck,
+                        isLoading: viewModel.isRefreshingStorage
+                    )
+
+                    Divider()
+
+                    permissionRow(
+                        granted: viewModel.accessibilityEnabled,
+                        title: "Accessibility",
+                        description: "Enables window titles and browser URLs in search",
+                        grantedDescription: "Search includes window titles and browser URLs",
+                        action: viewModel.requestAccessibilityPermission
+                    )
+                }
+            }
+
+            SettingsCard(title: "Recording Status", subtitle: "Current recorder state") {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 12) {
-                        statusPill(
-                            icon: viewModel.storagePermissionGranted == true ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                            tint: viewModel.storagePermissionGranted == true ? Color(red: 0.35, green: 0.7, blue: 0.32) : Color(hex: "E91515"),
-                            text: viewModel.storagePermissionGranted == true ? "Screen recording permission granted" : "Screen recording permission missing"
-                        )
-
                         statusPill(
                             icon: AppState.shared.isRecording ? "dot.radiowaves.left.and.right" : "pause.circle",
                             tint: AppState.shared.isRecording ? Color(hex: "FF7506") : Color.black.opacity(0.25),
@@ -21,35 +38,10 @@ struct SettingsStorageTabView: View {
                         )
                     }
 
-                    HStack(spacing: 12) {
-                        DayflowSurfaceButton(
-                            action: viewModel.runStorageStatusCheck,
-                            content: {
-                                HStack(spacing: 10) {
-                                    if viewModel.isRefreshingStorage {
-                                        ProgressView().scaleEffect(0.75)
-                                    }
-                                    Text(viewModel.isRefreshingStorage ? "Checking…" : "Run status check")
-                                        .font(.custom("Nunito", size: 13))
-                                        .fontWeight(.semibold)
-                                }
-                                .frame(minWidth: 170)
-                            },
-                            background: Color(red: 0.25, green: 0.17, blue: 0),
-                            foreground: .white,
-                            borderColor: .clear,
-                            cornerRadius: 8,
-                            horizontalPadding: 20,
-                            verticalPadding: 11,
-                            showOverlayStroke: true
-                        )
-                        .disabled(viewModel.isRefreshingStorage)
-
-                        if let last = viewModel.lastStorageCheck {
-                            Text("Last checked \(relativeDate(last))")
-                                .font(.custom("Nunito", size: 12))
-                                .foregroundColor(.black.opacity(0.45))
-                        }
+                    if let last = viewModel.lastStorageCheck {
+                        Text("Last checked \(relativeDate(last))")
+                            .font(.custom("Nunito", size: 12))
+                            .foregroundColor(.black.opacity(0.45))
                     }
                 }
             }
@@ -213,5 +205,55 @@ struct SettingsStorageTabView: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    @ViewBuilder
+    private func permissionRow(
+        granted: Bool,
+        title: String,
+        description: String,
+        grantedDescription: String? = nil,
+        action: @escaping () -> Void,
+        isLoading: Bool = false
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundColor(granted ? Color(red: 0.35, green: 0.7, blue: 0.32) : .orange)
+                .font(.system(size: 20))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom("Nunito", size: 13))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.black.opacity(0.85))
+                Text(granted ? (grantedDescription ?? description) : description)
+                    .font(.custom("Nunito", size: 11.5))
+                    .foregroundColor(.black.opacity(0.55))
+            }
+
+            Spacer()
+
+            DayflowSurfaceButton(
+                action: action,
+                content: {
+                    HStack(spacing: 8) {
+                        if isLoading {
+                            ProgressView().scaleEffect(0.65)
+                        }
+                        Text(isLoading ? "Checking…" : (granted ? "Recheck" : "Grant Access"))
+                            .font(.custom("Nunito", size: 12))
+                            .fontWeight(.semibold)
+                    }
+                },
+                background: Color(red: 0.25, green: 0.17, blue: 0),
+                foreground: .white,
+                borderColor: .clear,
+                cornerRadius: 6,
+                horizontalPadding: 12,
+                verticalPadding: 6,
+                showOverlayStroke: true
+            )
+            .disabled(isLoading)
+        }
     }
 }

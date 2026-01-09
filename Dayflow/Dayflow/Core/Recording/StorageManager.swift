@@ -797,6 +797,49 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
                 CREATE INDEX IF NOT EXISTS idx_llm_calls_batch ON llm_calls(batch_id);
             """)
 
+            // Screenshot context: app info captured at screenshot time (for search feature)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS screenshot_context (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    screenshot_id INTEGER NOT NULL REFERENCES screenshots(id) ON DELETE CASCADE,
+                    app_name TEXT,
+                    bundle_id TEXT,
+                    window_title TEXT,
+                    browser_url TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(screenshot_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_screenshot_context_screenshot ON screenshot_context(screenshot_id);
+                CREATE INDEX IF NOT EXISTS idx_screenshot_context_app ON screenshot_context(bundle_id);
+            """)
+
+            // Screenshot OCR: text extracted from screenshots (for search feature)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS screenshot_ocr (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    screenshot_id INTEGER NOT NULL REFERENCES screenshots(id) ON DELETE CASCADE,
+                    ocr_text TEXT NOT NULL,
+                    ocr_regions TEXT,
+                    confidence REAL,
+                    processing_duration_ms INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(screenshot_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_screenshot_ocr_screenshot ON screenshot_ocr(screenshot_id);
+            """)
+
+            // FTS5 virtual table for full-text search across screenshots
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE IF NOT EXISTS screenshot_search USING fts5(
+                    ocr_text,
+                    window_title,
+                    app_name,
+                    browser_url,
+                    content='',
+                    content_rowid='id'
+                );
+            """)
+
             // Migration: Add soft delete column to timeline_cards if it doesn't exist
             let timelineCardsColumns = try db.columns(in: "timeline_cards").map { $0.name }
             if !timelineCardsColumns.contains("is_deleted") {
@@ -1012,6 +1055,179 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
             screenshotId = db.lastInsertedRowID
         }
         return screenshotId
+    }
+
+    /// Save app context captured at screenshot time (for search feature)
+    func saveScreenshotContext(screenshotId: Int64, appName: String?, bundleId: String?, windowTitle: String?, browserURL: String?) {
+        try? timedWrite("saveScreenshotContext") { db in
+            try db.execute(sql: """
+                INSERT INTO screenshot_context(screenshot_id, app_name, bundle_id, window_title, browser_url)
+                VALUES (?, ?, ?, ?, ?)
+            """, arguments: [screenshotId, appName, bundleId, windowTitle, browserURL])
+        }
+    }
+
+    // MARK: - OCR Storage (for search feature)
+
+    /// Fetch screenshots that haven't been OCR processed yet
+    func fetchScreenshotsWithoutOCR(limit: Int) -> [(screenshotId: Int64, filePath: String)] {
+        (try? timedRead("fetchScreenshotsWithoutOCR") { db in
+            try Row.fetchAll(db, sql: """
+                SELECT s.id, s.file_path FROM screenshots s
+                LEFT JOIN screenshot_ocr o ON s.id = o.screenshot_id
+                WHERE o.id IS NULL
+                  AND s.is_deleted = 0
+                ORDER BY s.captured_at DESC
+                LIMIT ?
+            """, arguments: [limit])
+            .compactMap { row -> (Int64, String)? in
+                guard let id: Int64 = row["id"],
+                      let path: String = row["file_path"] else { return nil }
+                return (id, path)
+            }
+        }) ?? []
+    }
+
+    /// Save OCR results for a screenshot
+    func saveScreenshotOCR(screenshotId: Int64, ocrText: String, ocrRegions: [OCRProcessingService.TextRegion], confidence: Float, processingDurationMs: Int) {
+        let regionsJSON: String? = {
+            guard !ocrRegions.isEmpty else { return nil }
+            let encoder = JSONEncoder()
+            if let data = try? encoder.encode(ocrRegions) {
+                return String(data: data, encoding: .utf8)
+            }
+            return nil
+        }()
+
+        try? timedWrite("saveScreenshotOCR") { db in
+            try db.execute(sql: """
+                INSERT INTO screenshot_ocr(screenshot_id, ocr_text, ocr_regions, confidence, processing_duration_ms)
+                VALUES (?, ?, ?, ?, ?)
+            """, arguments: [screenshotId, ocrText, regionsJSON, confidence, processingDurationMs])
+
+            // Also update FTS index
+            // First get context data for this screenshot
+            if let contextRow = try? Row.fetchOne(db, sql: """
+                SELECT app_name, window_title, browser_url FROM screenshot_context
+                WHERE screenshot_id = ?
+            """, arguments: [screenshotId]) {
+                let appName: String? = contextRow["app_name"]
+                let windowTitle: String? = contextRow["window_title"]
+                let browserURL: String? = contextRow["browser_url"]
+
+                try db.execute(sql: """
+                    INSERT INTO screenshot_search(rowid, ocr_text, window_title, app_name, browser_url)
+                    VALUES (?, ?, ?, ?, ?)
+                """, arguments: [screenshotId, ocrText, windowTitle, appName, browserURL])
+            } else {
+                // No context, just index OCR text
+                try db.execute(sql: """
+                    INSERT INTO screenshot_search(rowid, ocr_text, window_title, app_name, browser_url)
+                    VALUES (?, ?, NULL, NULL, NULL)
+                """, arguments: [screenshotId, ocrText])
+            }
+        }
+    }
+
+    // MARK: - Search (for search feature)
+
+    /// Search screenshots using FTS5 full-text search
+    func searchScreenshots(ftsQuery: String, filters: SearchService.SearchFilters?, limit: Int, offset: Int) -> [SearchService.SearchResult] {
+        (try? timedRead("searchScreenshots") { db in
+            // Build SQL with optional filters
+            var conditions: [String] = []
+            var arguments: [DatabaseValueConvertible] = []
+
+            // Date range filter
+            if let dateRange = filters?.dateRange {
+                let startTs = Int(dateRange.lowerBound.timeIntervalSince1970)
+                let endTs = Int(dateRange.upperBound.timeIntervalSince1970)
+                conditions.append("s.captured_at >= ? AND s.captured_at <= ?")
+                arguments.append(contentsOf: [startTs, endTs])
+            }
+
+            // App filter
+            if let bundleIds = filters?.appBundleIds, !bundleIds.isEmpty {
+                let placeholders = bundleIds.map { _ in "?" }.joined(separator: ", ")
+                conditions.append("c.bundle_id IN (\(placeholders))")
+                arguments.append(contentsOf: bundleIds)
+            }
+
+            let whereClause = conditions.isEmpty ? "" : " AND " + conditions.joined(separator: " AND ")
+
+            // FTS query with snippet for match highlighting
+            arguments.insert(ftsQuery, at: 0)
+
+            // Note: FTS5 table is contentless so snippet() won't work
+            // Instead, get OCR text directly and truncate
+            let sql = """
+                SELECT
+                    s.id,
+                    s.file_path,
+                    s.captured_at,
+                    substr(o.ocr_text, 1, 200) AS matched_text,
+                    c.app_name,
+                    c.window_title,
+                    c.bundle_id,
+                    c.browser_url,
+                    o.ocr_regions
+                FROM screenshot_search fts
+                JOIN screenshots s ON s.id = fts.rowid
+                LEFT JOIN screenshot_ocr o ON o.screenshot_id = s.id
+                LEFT JOIN screenshot_context c ON c.screenshot_id = s.id
+                WHERE screenshot_search MATCH ?
+                  AND s.is_deleted = 0
+                \(whereClause)
+                ORDER BY fts.rank, s.captured_at DESC
+                LIMIT ? OFFSET ?
+            """
+
+            arguments.append(limit)
+            arguments.append(offset)
+
+            return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+                .map { row in
+                    // Parse OCR regions from JSON
+                    var ocrRegions: [SearchService.TextRegion] = []
+                    if let regionsJson = row["ocr_regions"] as? String,
+                       let data = regionsJson.data(using: .utf8) {
+                        ocrRegions = (try? JSONDecoder().decode([SearchService.TextRegion].self, from: data)) ?? []
+                    }
+
+                    return SearchService.SearchResult(
+                        id: row["id"] ?? 0,
+                        screenshotPath: row["file_path"] ?? "",
+                        capturedAt: Date(timeIntervalSince1970: TimeInterval(row["captured_at"] as Int? ?? 0)),
+                        matchedText: row["matched_text"] ?? "",
+                        appName: row["app_name"],
+                        windowTitle: row["window_title"],
+                        bundleId: row["bundle_id"],
+                        browserURL: row["browser_url"],
+                        ocrRegions: ocrRegions
+                    )
+                }
+        }) ?? []
+    }
+
+    /// Fetch distinct apps for filter dropdown
+    func fetchDistinctApps() -> [SearchService.AppInfo] {
+        (try? timedRead("fetchDistinctApps") { db in
+            try Row.fetchAll(db, sql: """
+                SELECT c.app_name, c.bundle_id, COUNT(*) as count
+                FROM screenshot_context c
+                JOIN screenshots s ON s.id = c.screenshot_id
+                WHERE s.is_deleted = 0
+                  AND c.bundle_id IS NOT NULL
+                GROUP BY c.bundle_id
+                ORDER BY count DESC
+            """)
+            .compactMap { row -> SearchService.AppInfo? in
+                guard let name: String = row["app_name"],
+                      let bundleId: String = row["bundle_id"],
+                      let count: Int = row["count"] else { return nil }
+                return SearchService.AppInfo(name: name, bundleId: bundleId, count: count)
+            }
+        }) ?? []
     }
 
     func fetchUnprocessedScreenshots(since oldestTimestamp: Int) -> [Screenshot] {
