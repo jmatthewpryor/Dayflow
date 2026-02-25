@@ -224,6 +224,14 @@ struct DayflowApp: App {
                 }
                 .keyboardShortcut("N", modifiers: [.command, .shift])
             }
+
+            // Search shortcut (Cmd+K)
+            CommandGroup(after: .textEditing) {
+                Button("Search Screenshots") {
+                    NotificationCenter.default.post(name: .showSearch, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: .command)
+            }
         }
         .defaultSize(width: 1200, height: 800)
     }

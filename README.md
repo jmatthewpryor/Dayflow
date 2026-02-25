@@ -75,10 +75,28 @@ It's fully open‑source and extensible: inspect the codebase, audit how data is
 - **Watch timelapses of your day**.
 - **Distraction highlights** to see what pulled you off‑task.
 - **Timeline export** - export your timeline as Markdown for any date range.
+- **Full-text search** with OCR text extraction — find any moment by searching text visible on screen.
 - **Local‑first privacy** - data stays on your Mac; choose your AI provider.
 - **Open‑source & extensible** - inspect the codebase or build it yourself.
 - **Native UX** built with **SwiftUI**.
 - **Automatic storage cleanup** with configurable limits.
+
+### Search
+
+Find any moment from your timeline by searching for text visible on screen.
+
+<div align="center">
+  <img src="docs/images/SearchPreview.png" alt="Dayflow search preview" width="800">
+</div>
+
+- **Full-text search** — SQLite FTS5-powered search across all captured text.
+- **OCR text extraction** — Vision framework automatically extracts text from screenshots.
+- **App context** — Search includes app names, window titles, and browser URLs.
+- **Visual highlighting** — Matched text regions highlighted on screenshots.
+- **Quick access** — ⌘K keyboard shortcut for instant search.
+- **Detail view** — Full screenshot with metadata, quick actions (Open Image, Show in Finder, Open URL).
+
+> **Note:** Search feature is available in this fork. OCR processing runs in the background without impacting recording performance.
 
 ### Daily Journal `BETA`
 
