@@ -28,3 +28,9 @@ tools/
 # Eval frameworks
 claudeeval/
 codexeval/
+
+# VSCode local history
+.history/
+
+# Xcode profiling data
+*.profraw
