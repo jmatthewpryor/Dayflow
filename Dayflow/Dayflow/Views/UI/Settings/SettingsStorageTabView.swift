@@ -5,6 +5,27 @@ struct SettingsStorageTabView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 28) {
+      SettingsCard(title: "Permissions", subtitle: "Grant access for full Dayflow functionality") {
+        VStack(alignment: .leading, spacing: 14) {
+          permissionRow(
+            granted: viewModel.storagePermissionGranted == true,
+            title: "Screen Recording",
+            description: "Required to capture your screen",
+            grantedDescription: "Screen recording permission granted",
+            action: viewModel.runStorageStatusCheck,
+            isLoading: viewModel.isRefreshingStorage
+          )
+          permissionRow(
+            granted: viewModel.accessibilityEnabled,
+            title: "Accessibility",
+            description: "Required for app context capture (window titles, URLs)",
+            grantedDescription: "Accessibility permission granted",
+            action: viewModel.requestAccessibilityPermission,
+            isLoading: false
+          )
+        }
+      }
+
       SettingsCard(title: "Recording Status", subtitle: "Ensure Dayflow can capture your screen") {
         VStack(alignment: .leading, spacing: 14) {
           HStack(spacing: 12) {
@@ -222,5 +243,58 @@ struct SettingsStorageTabView: View {
     let formatter = RelativeDateTimeFormatter()
     formatter.unitsStyle = .abbreviated
     return formatter.localizedString(for: date, relativeTo: Date())
+  }
+
+  @ViewBuilder
+  private func permissionRow(
+    granted: Bool,
+    title: String,
+    description: String,
+    grantedDescription: String,
+    action: @escaping () -> Void,
+    isLoading: Bool
+  ) -> some View {
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+          .font(.custom("Nunito", size: 14))
+          .fontWeight(.semibold)
+          .foregroundColor(.black.opacity(0.75))
+        Text(granted ? grantedDescription : description)
+          .font(.custom("Nunito", size: 12))
+          .foregroundColor(.black.opacity(0.55))
+      }
+
+      Spacer()
+
+      if granted {
+        statusPill(
+          icon: "checkmark.circle.fill",
+          tint: Color(red: 0.35, green: 0.7, blue: 0.32),
+          text: "Granted"
+        )
+      } else {
+        DayflowSurfaceButton(
+          action: action,
+          content: {
+            HStack(spacing: 10) {
+              if isLoading {
+                ProgressView().scaleEffect(0.75)
+              }
+              Text(isLoading ? "Checking..." : "Grant Access")
+                .font(.custom("Nunito", size: 13))
+                .fontWeight(.semibold)
+            }
+          },
+          background: Color(red: 0.25, green: 0.17, blue: 0),
+          foreground: .white,
+          borderColor: .clear,
+          cornerRadius: 8,
+          horizontalPadding: 20,
+          verticalPadding: 11,
+          showOverlayStroke: true
+        )
+      }
+    }
   }
 }

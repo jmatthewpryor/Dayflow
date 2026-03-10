@@ -36,6 +36,7 @@ struct MainView: View {
   // Hero animation for video expansion (Emil Kowalski: shared element transitions)
   @Namespace var videoHeroNamespace
   @StateObject var videoExpansionState = VideoExpansionState()
+  @StateObject var searchState = SearchState()
 
   // Track if we've performed the initial scroll to current time
   @State var didInitialScroll = false

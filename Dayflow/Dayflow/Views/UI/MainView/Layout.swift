@@ -101,6 +101,7 @@ extension MainView {
         case .daily: tabName = "daily"
         case .chat: tabName = "dashboard"
         case .journal: tabName = "journal"
+        case .search: tabName = "search"
         case .bug: tabName = "bug_report"
         case .settings: tabName = "settings"
         }
@@ -295,6 +296,9 @@ extension MainView {
         DailyView(selectedDate: $selectedDate)
       case .journal:
         JournalView()
+          .padding(15)
+      case .search:
+        SearchView(searchState: searchState)
           .padding(15)
       case .bug:
         BugReportView()
@@ -630,6 +634,18 @@ extension MainView {
         .environmentObject(categoryStore)
         .transition(.opacity)
         .zIndex(2)
+      }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .showSearch)) { _ in
+      selectedIcon = .search
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .navigateToScreenshot)) { notification in
+      if let timestamp = notification.userInfo?["timestamp"] as? Date {
+        selectedIcon = .timeline
+        setSelectedDate(timestamp)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+          scrollToNowTick &+= 1
+        }
       }
     }
   }
