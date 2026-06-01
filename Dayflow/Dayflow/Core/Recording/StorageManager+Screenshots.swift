@@ -116,4 +116,91 @@ extension StorageManager {
     }) ?? []
   }
 
+  // MARK: - Search Feature
+
+  /// Save app context captured at screenshot time (for search feature)
+  func saveScreenshotContext(
+    screenshotId: Int64, appName: String?, bundleId: String?, windowTitle: String?,
+    browserURL: String?
+  ) {
+    try? timedWrite("saveScreenshotContext") { db in
+      try db.execute(
+        sql: """
+              INSERT INTO screenshot_context(screenshot_id, app_name, bundle_id, window_title, browser_url)
+              VALUES (?, ?, ?, ?, ?)
+          """, arguments: [screenshotId, appName, bundleId, windowTitle, browserURL])
+    }
+  }
+
+  /// Fetch screenshots that haven't been OCR processed yet
+  func fetchScreenshotsWithoutOCR(limit: Int) -> [(screenshotId: Int64, filePath: String)] {
+    (try? timedRead("fetchScreenshotsWithoutOCR") { db in
+      try Row.fetchAll(
+        db,
+        sql: """
+              SELECT s.id, s.file_path FROM screenshots s
+              LEFT JOIN screenshot_ocr o ON s.id = o.screenshot_id
+              WHERE o.id IS NULL
+                AND s.is_deleted = 0
+              ORDER BY s.captured_at DESC
+              LIMIT ?
+          """, arguments: [limit]
+      )
+      .compactMap { row -> (Int64, String)? in
+        guard let id: Int64 = row["id"],
+          let path: String = row["file_path"]
+        else { return nil }
+        return (id, path)
+      }
+    }) ?? []
+  }
+
+  /// Save OCR results for a screenshot
+  func saveScreenshotOCR(
+    screenshotId: Int64, ocrText: String, ocrRegions: [OCRProcessingService.TextRegion],
+    confidence: Float, processingDurationMs: Int
+  ) {
+    let regionsJSON: String? = {
+      guard !ocrRegions.isEmpty else { return nil }
+      let encoder = JSONEncoder()
+      if let data = try? encoder.encode(ocrRegions) {
+        return String(data: data, encoding: .utf8)
+      }
+      return nil
+    }()
+
+    try? timedWrite("saveScreenshotOCR") { db in
+      try db.execute(
+        sql: """
+              INSERT INTO screenshot_ocr(screenshot_id, ocr_text, ocr_regions, confidence, processing_duration_ms)
+              VALUES (?, ?, ?, ?, ?)
+          """, arguments: [screenshotId, ocrText, regionsJSON, confidence, processingDurationMs])
+
+      // Also update FTS index
+      if let contextRow = try? Row.fetchOne(
+        db,
+        sql: """
+              SELECT app_name, window_title, browser_url FROM screenshot_context
+              WHERE screenshot_id = ?
+          """, arguments: [screenshotId])
+      {
+        let appName: String? = contextRow["app_name"]
+        let windowTitle: String? = contextRow["window_title"]
+        let browserURL: String? = contextRow["browser_url"]
+
+        try db.execute(
+          sql: """
+                INSERT INTO screenshot_search(rowid, ocr_text, window_title, app_name, browser_url)
+                VALUES (?, ?, ?, ?, ?)
+            """, arguments: [screenshotId, ocrText, windowTitle, appName, browserURL])
+      } else {
+        try db.execute(
+          sql: """
+                INSERT INTO screenshot_search(rowid, ocr_text, window_title, app_name, browser_url)
+                VALUES (?, ?, NULL, NULL, NULL)
+            """, arguments: [screenshotId, ocrText])
+      }
+    }
+  }
+
 }

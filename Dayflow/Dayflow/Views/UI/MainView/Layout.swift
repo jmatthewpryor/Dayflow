@@ -215,6 +215,18 @@ extension MainView {
       ) { _ in
         handleAppDidBecomeActive()
       }
+      .onReceive(NotificationCenter.default.publisher(for: .showSearch)) { _ in
+        selectedIcon = .search
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .navigateToScreenshot)) { notification in
+        if let timestamp = notification.userInfo?["timestamp"] as? Date {
+          selectedIcon = .timeline
+          setSelectedDate(timestamp)
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            scrollToNowTick &+= 1
+          }
+        }
+      }
   }
 
   // MARK: - Extracted overlays and event handlers
@@ -542,6 +554,9 @@ extension MainView {
         WeeklyView()
       case .journal:
         JournalView()
+          .padding(15)
+      case .search:
+        SearchView(searchState: searchState)
           .padding(15)
       case .bug:
         BugReportView()

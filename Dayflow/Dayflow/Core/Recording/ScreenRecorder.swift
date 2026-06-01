@@ -451,11 +451,23 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
     let fileURL = StorageManager.shared.nextScreenshotURL()
     try jpegData.write(to: fileURL)
 
-    _ = StorageManager.shared.saveScreenshot(
+    if let screenshotId = StorageManager.shared.saveScreenshot(
       url: fileURL,
       capturedAt: capturedAt,
       idleSecondsAtCapture: idleSecondsAtCapture
-    )
+    ) {
+      // Capture app context (frontmost app, window title, browser URL)
+      Task.detached {
+        let context = await AppContextService.shared.captureContext()
+        StorageManager.shared.saveScreenshotContext(
+          screenshotId: screenshotId,
+          appName: context.appName,
+          bundleId: context.bundleId,
+          windowTitle: context.windowTitle,
+          browserURL: context.browserURL
+        )
+      }
+    }
     return fileURL
   }
 

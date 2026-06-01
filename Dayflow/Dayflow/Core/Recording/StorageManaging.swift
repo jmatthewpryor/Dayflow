@@ -104,4 +104,27 @@ protocol StorageManaging: Sendable {
 
   /// Fetch screenshots within a time range (for timelapse generation)
   func fetchScreenshotsInTimeRange(startTs: Int, endTs: Int) -> [Screenshot]
+
+  // MARK: - Search Feature
+
+  /// Save app context captured at screenshot time
+  func saveScreenshotContext(
+    screenshotId: Int64, appName: String?, bundleId: String?, windowTitle: String?,
+    browserURL: String?)
+
+  /// Fetch screenshots that haven't been OCR processed yet
+  func fetchScreenshotsWithoutOCR(limit: Int) -> [(screenshotId: Int64, filePath: String)]
+
+  /// Save OCR results for a screenshot
+  func saveScreenshotOCR(
+    screenshotId: Int64, ocrText: String, ocrRegions: [OCRProcessingService.TextRegion],
+    confidence: Float, processingDurationMs: Int)
+
+  /// Search screenshots using FTS5 full-text search
+  func searchScreenshots(
+    ftsQuery: String, filters: SearchService.SearchFilters?, limit: Int, offset: Int
+  ) -> [SearchService.SearchResult]
+
+  /// Fetch distinct apps for filter dropdown
+  func fetchDistinctApps() -> [SearchService.AppInfo]
 }

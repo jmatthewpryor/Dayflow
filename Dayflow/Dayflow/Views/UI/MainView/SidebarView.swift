@@ -21,6 +21,7 @@ enum SidebarIcon: CaseIterable {
   case weekly
   case chat
   case journal
+  case search
   case bug
   case settings
 
@@ -31,6 +32,7 @@ enum SidebarIcon: CaseIterable {
     case .weekly: return "WeeklyIcon"
     case .chat: return "ChatIcon"
     case .journal: return "JournalIcon"
+    case .search: return nil
     case .bug: return nil
     case .settings: return nil
     }
@@ -38,6 +40,7 @@ enum SidebarIcon: CaseIterable {
 
   var systemNameFallback: String? {
     switch self {
+    case .search: return "magnifyingglass"
     case .bug: return "exclamationmark.bubble.fill"
     case .settings: return "gearshape.fill"
     default: return nil
@@ -51,6 +54,7 @@ enum SidebarIcon: CaseIterable {
     case .weekly: return "Weekly"
     case .chat: return "Chat"
     case .journal: return "Journal"
+    case .search: return "Search"
     case .bug: return "Report"
     case .settings: return "Settings"
     }
@@ -63,6 +67,7 @@ enum SidebarIcon: CaseIterable {
     case .weekly: return "weekly"
     case .chat: return "dashboard"
     case .journal: return "journal"
+    case .search: return "search"
     case .bug: return "bug_report"
     case .settings: return "settings"
     }

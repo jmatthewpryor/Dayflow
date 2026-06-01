@@ -16,6 +16,7 @@ final class StorageSettingsViewModel: ObservableObject {
   @Published var timelapsesLimitIndex: Int
   @Published var showLimitConfirmation = false
   @Published var pendingLimit: PendingLimit?
+  @Published var accessibilityEnabled: Bool = false
 
   let usageFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
@@ -32,6 +33,14 @@ final class StorageSettingsViewModel: ObservableObject {
     timelapsesLimitBytes = timelapseLimit
     recordingsLimitIndex = Self.indexForLimit(recordingsLimit)
     timelapsesLimitIndex = Self.indexForLimit(timelapseLimit)
+    accessibilityEnabled = AppContextService.isAccessibilityEnabled()
+  }
+
+  func requestAccessibilityPermission() {
+    AppContextService.requestAccessibilityPermission()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+      self?.accessibilityEnabled = AppContextService.isAccessibilityEnabled()
+    }
   }
 
   func refreshStorageIfNeeded(isStorageTab: Bool) {

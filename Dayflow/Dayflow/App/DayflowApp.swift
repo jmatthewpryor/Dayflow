@@ -262,6 +262,14 @@ struct DayflowApp: App {
         .keyboardShortcut("R", modifiers: [.command, .shift])
       }
 
+      // Search shortcut
+      CommandGroup(after: .textEditing) {
+        Button("Search Screenshots") {
+          NotificationCenter.default.post(name: .showSearch, object: nil)
+        }
+        .keyboardShortcut("k", modifiers: .command)
+      }
+
       // Add Sparkle's update menu item
       CommandGroup(after: .appInfo) {
         Button("Check for Updates…") {

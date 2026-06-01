@@ -5,6 +5,7 @@ struct SettingsStorageTabView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: SettingsStyle.sectionSpacing) {
+      permissionsSection
       recordingStatusSection
       diskUsageSection
     }
@@ -30,6 +31,40 @@ struct SettingsStorageTabView: View {
           viewModel.showLimitConfirmation = false
         }
       )
+    }
+  }
+
+  // MARK: - Permissions
+
+  private var permissionsSection: some View {
+    SettingsSection(
+      title: "Permissions",
+      subtitle: "Grant access for full Dayflow functionality."
+    ) {
+      VStack(alignment: .leading, spacing: 0) {
+        SettingsRow(label: "Screen recording") {
+          if viewModel.storagePermissionGranted == true {
+            SettingsStatusDot(state: .good, label: "Granted")
+          } else {
+            SettingsPrimaryButton(
+              title: viewModel.isRefreshingStorage ? "Checking…" : "Grant access",
+              isLoading: viewModel.isRefreshingStorage,
+              action: viewModel.runStorageStatusCheck
+            )
+          }
+        }
+        SettingsRow(label: "Accessibility", showsDivider: false) {
+          if viewModel.accessibilityEnabled {
+            SettingsStatusDot(state: .good, label: "Granted")
+          } else {
+            SettingsPrimaryButton(
+              title: "Grant access",
+              isLoading: false,
+              action: viewModel.requestAccessibilityPermission
+            )
+          }
+        }
+      }
     }
   }
 

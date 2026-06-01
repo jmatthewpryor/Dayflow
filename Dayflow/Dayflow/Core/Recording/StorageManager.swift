@@ -648,6 +648,52 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
               CREATE INDEX IF NOT EXISTS idx_llm_calls_batch ON llm_calls(batch_id);
           """)
 
+      // Screenshot context: app info captured at screenshot time (for search feature)
+      try db.execute(
+        sql: """
+              CREATE TABLE IF NOT EXISTS screenshot_context (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  screenshot_id INTEGER NOT NULL REFERENCES screenshots(id) ON DELETE CASCADE,
+                  app_name TEXT,
+                  bundle_id TEXT,
+                  window_title TEXT,
+                  browser_url TEXT,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE(screenshot_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_screenshot_context_screenshot ON screenshot_context(screenshot_id);
+              CREATE INDEX IF NOT EXISTS idx_screenshot_context_app ON screenshot_context(bundle_id);
+          """)
+
+      // Screenshot OCR: text extracted from screenshots (for search feature)
+      try db.execute(
+        sql: """
+              CREATE TABLE IF NOT EXISTS screenshot_ocr (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  screenshot_id INTEGER NOT NULL REFERENCES screenshots(id) ON DELETE CASCADE,
+                  ocr_text TEXT NOT NULL,
+                  ocr_regions TEXT,
+                  confidence REAL,
+                  processing_duration_ms INTEGER,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE(screenshot_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_screenshot_ocr_screenshot ON screenshot_ocr(screenshot_id);
+          """)
+
+      // FTS5 virtual table for full-text search across screenshots
+      try db.execute(
+        sql: """
+              CREATE VIRTUAL TABLE IF NOT EXISTS screenshot_search USING fts5(
+                  ocr_text,
+                  window_title,
+                  app_name,
+                  browser_url,
+                  content='',
+                  content_rowid='id'
+              );
+          """)
+
       // Migration: Add soft delete column to timeline_cards if it doesn't exist
       let timelineCardsColumns = try db.columns(in: "timeline_cards").map { $0.name }
       if !timelineCardsColumns.contains("is_deleted") {
